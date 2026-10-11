@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>WLOC Coordinate Picker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; color: #1c1c1e; }
+  #map { height: 52vh; min-height: 320px; }
+  .panel { padding: 16px; max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .sub { color: #6b7280; font-size: 13px; margin: 0 0 14px; }
+  .row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .field { flex: 1; min-width: 140px; }
+  label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+  input, select { width: 100%; padding: 9px 10px; font-size: 15px; border: 1px solid #d1d5db; border-radius: 8px; }
+  input.bad { border-color: #ef4444; background: #fef2f2; }
+  .hint { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
+  .error { font-size: 12px; color: #b91c1c; margin: 2px 0 0; display: none; }
+  .btn { display: inline-block; padding: 10px 16px; font-size: 15px; border: none; border-radius: 8px; background: #6366f1; color: #fff; cursor: pointer; }
+  .btn:active { background: #4f46e5; }
+  .btn.ghost { background: #eef2ff; color: #4338ca; }
+  .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin: 12px 0; font-size: 14px; }
+  .card code { font-size: 13px; word-break: break-all; }
+  .ok { color: #047857; font-weight: 600; }
+  .searchrow { display: flex; gap: 8px; }
+  .searchrow input { flex: 1; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="panel">
+  <h1>WLOC Coordinate Picker</h1>
+  <p class="sub">Tap the map (or drag the pin) to get correct <strong>WGS84</strong> GPS coordinates for your WLOC module.</p>
+
+  <div class="searchrow" style="margin-bottom:12px">
+    <input id="search" type="text" placeholder="Search a place… (e.g. Central Park)">
+    <button class="btn ghost" id="searchBtn">Go</button>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label>Latitude (−90 to 90)</label>
+      <input id="lat" type="text" inputmode="decimal" value="22.544577">
+      <p class="error" id="latErr">Enter a number between −90 and 90.</p>
+    </div>
+    <div class="field">
+      <label>Longitude (−180 to 180)</label>
+      <input id="lon" type="text" inputmode="decimal" value="113.94114">
+      <p class="error" id="lonErr">Enter a number between −180 and 180.</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label>Coordinate system of the numbers above</label>
+      <select id="csys">
+        <option value="wgs84">WGS84 — GPS standard (what WLOC needs)</option>
+        <option value="gcj02">GCJ-02 — Amap / AutoNavi</option>
+        <option value="bd09">BD-09 — Baidu Maps</option>
+      </select>
+      <p class="hint">Pasting Amap/Baidu coords? Pick their system and they'll be converted to correct WGS84 automatically.</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label>Paste an Amap share link (optional)</label>
+      <input id="amaplink" type="text" placeholder="https://www.amap.com/… or surl.amap.com/…">
+      <p class="hint">Extracts GCJ-02 coordinates from the link and converts them. Short links that need a redirect may not resolve.</p>
+    </div>
+    <div class="field" style="flex:0 0 auto; align-self:flex-end">
+      <button class="btn ghost" id="parseBtn">Extract</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label>Accuracy (meters)</label>
+      <input id="acc" type="text" inputmode="numeric" value="25">
+    </div>
+    <div class="field">
+      <label>Jitter radius (meters, 0 = off)</label>
+      <input id="jit" type="text" inputmode="numeric" value="0">
+    </div>
+  </div>
+
+  <div class="card">
+    <div>Final WGS84: <span class="ok" id="final">22.544577, 113.94114</span></div>
+    <div style="margin-top:8px"><strong>Loon arguments</strong><br>
+      <code>longitude = <span id="loonLon">113.94114</span><br>latitude = <span id="loonLat">22.544577</span></code></div>
+    <div style="margin-top:8px"><strong>Shadowrocket argument string</strong><br>
+      <code id="srArgs">longitude=113.94114&amp;latitude=22.544577&amp;accuracy=25&amp;randomRadius=0&amp;logLevel=info</code></div>
+  </div>
+
+  <div class="row">
+    <button class="btn" id="copyLoon">Copy Loon values</button>
+    <button class="btn" id="copySR">Copy Shadowrocket string</button>
+    <button class="btn ghost" id="copyLatLon">Copy lat, lon</button>
+  </div>
+  <p class="hint">After copying, paste into the module's arguments in Loon / Shadowrocket. Or save straight to the device with the community picker page or iOS Shortcuts from the module README — the save is intercepted locally and never leaves your phone.</p>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ---------- Coordinate math (standard public GCJ-02 / BD-09 transforms) ----------
+const PI = Math.PI, A = 6378245.0, EE = 0.00669342162296594323;
+function outOfChina(lat, lon) { return lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271; }
+function tLat(x, y) {
+  let r = -100 + 2*x + 3*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+  r += (20*Math.sin(6*x*PI) + 20*Math.sin(2*x*PI)) * 2/3;
+  r += (20*Math.sin(y*PI) + 40*Math.sin(y/3*PI)) * 2/3;
+  r += (160*Math.sin(y/12*PI) + 320*Math.sin(y*PI/30)) * 2/3;
+  return r;
+}
+function tLon(x, y) {
+  let r = 300 + x + 2*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+  r += (20*Math.sin(6*x*PI) + 20*Math.sin(2*x*PI)) * 2/3;
+  r += (20*Math.sin(x*PI) + 40*Math.sin(x/3*PI)) * 2/3;
+  r += (150*Math.sin(x/12*PI) + 300*Math.sin(x*PI/30)) * 2/3;
+  return r;
+}
+function wgs84ToGcj02(lat, lon) {
+  if (outOfChina(lat, lon)) return [lat, lon];
+  let dLat = tLat(lon-105, lat-35), dLon = tLon(lon-105, lat-35);
+  const rad = lat/180*PI; let m = 1 - EE*Math.sin(rad)*Math.sin(rad); const s = Math.sqrt(m);
+  dLat = dLat*180/((A*(1-EE))/(m*s)*PI); dLon = dLon*180/(A/s*Math.cos(rad)*PI);
+  return [lat+dLat, lon+dLon];
+}
+function gcj02ToWgs84(lat, lon) {
+  if (outOfChina(lat, lon)) return [lat, lon];
+  const g = wgs84ToGcj02(lat, lon);
+  return [lat*2-g[0], lon*2-g[1]];
+}
+function bd09ToGcj02(lat, lon) {
+  const x = lon - 0.0065, y = lat - 0.006;
+  const z = Math.sqrt(x*x + y*y) - 0.00002*Math.sin(y*PI);
+  const t = Math.atan2(y, x) - 0.000003*Math.cos(x*PI);
+  return [z*Math.sin(t), z*Math.cos(t)];
+}
+function toWgs84(lat, lon, sys) {
+  if (sys === 'gcj02') return gcj02ToWgs84(lat, lon);
+  if (sys === 'bd09') { const g = bd09ToGcj02(lat, lon); return gcj02ToWgs84(g[0], g[1]); }
+  return [lat, lon];
+}
+
+// ---------- Map ----------
+const map = L.map('map').setView([22.544577, 113.94114], 13);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+const marker = L.marker([22.544577, 113.94114], { draggable: true }).addTo(map);
+
+const $ = id => document.getElementById(id);
+const latEl = $('lat'), lonEl = $('lon'), csysEl = $('csys');
+
+function validNum(v, min, max) { const n = Number(v); return v.trim() !== '' && isFinite(n) && n >= min && n <= max; }
+
+function refresh(fromMap) {
+  const latOk = validNum(latEl.value, -90, 90), lonOk = validNum(lonEl.value, -180, 180);
+  latEl.classList.toggle('bad', !latOk); lonEl.classList.toggle('bad', !lonOk);
+  $('latErr').style.display = latOk ? 'none' : 'block';
+  $('lonErr').style.display = lonOk ? 'none' : 'block';
+  if (!latOk || !lonOk) { $('final').textContent = '— fix the highlighted field —'; $('final').classList.remove('ok'); return; }
+  let [wLat, wLon] = toWgs84(Number(latEl.value), Number(lonEl.value), csysEl.value);
+  wLat = +wLat.toFixed(6); wLon = +wLon.toFixed(6);
+  $('final').textContent = wLat + ', ' + wLon; $('final').classList.add('ok');
+  $('loonLat').textContent = wLat; $('loonLon').textContent = wLon;
+  const acc = $('acc').value.trim() || '25', jit = $('jit').value.trim() || '0';
+  $('srArgs').textContent = 'longitude=' + wLon + '&latitude=' + wLat + '&accuracy=' + acc + '&randomRadius=' + jit + '&logLevel=info';
+  if (!fromMap) { marker.setLatLng([wLat, wLon]); map.panTo([wLat, wLon]); }
+}
+
+function setFromMap(latlng) {
+  const sys = csysEl.value;
+  // Map tiles are WGS84; if the user picked another system, show the equivalent input
+  let lat = latlng.lat, lon = latlng.lng;
+  if (sys === 'gcj02') [lat, lon] = wgs84ToGcj02(lat, lon);
+  if (sys === 'bd09') { const g = wgs84ToGcj02(lat, lon); const z = Math.sqrt(g[1]*g[1]+g[0]*g[0]) + 0.00002*Math.sin(g[0]*PI); const t = Math.atan2(g[0], g[1]) + 0.000003*Math.cos(g[1]*PI); lat = z*Math.sin(t)+0.006; lon = z*Math.cos(t)+0.0065; }
+  latEl.value = lat.toFixed(6); lonEl.value = lon.toFixed(6);
+  refresh(true);
+}
+
+map.on('click', e => { marker.setLatLng(e.latlng); setFromMap(e.latlng); });
+marker.on('dragend', () => setFromMap(marker.getLatLng()));
+[latEl, lonEl, csysEl, $('acc'), $('jit')].forEach(el => el.addEventListener('input', () => refresh(false)));
+
+// ---------- Search (Nominatim) ----------
+async function doSearch() {
+  const q = $('search').value.trim(); if (!q) return;
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } });
+    const j = await r.json();
+    if (j && j.length) { const p = j[0]; marker.setLatLng([+p.lat, +p.lon]); map.setView([+p.lat, +p.lon], 14); setFromMap({ lat: +p.lat, lng: +p.lon }); }
+    else alert('No results found.');
+  } catch (e) { alert('Search failed — check your connection.'); }
+}
+$('searchBtn').addEventListener('click', doSearch);
+$('search').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+// ---------- Amap link extraction (best effort) ----------
+$('parseBtn').addEventListener('click', () => {
+  const s = $('amaplink').value;
+  // look for decimal lng,lat pairs (Amap links carry GCJ-02)
+  const m = s.match(/(-?\d{2,3}\.\d+)\s*,\s*(-?\d{1,2}\.\d+)/);
+  if (m) {
+    let a = parseFloat(m[1]), b = parseFloat(m[2]);
+    // decide which is lon: lon range wider; Amap uses lng,lat order
+    let lon = a, lat = b;
+    if (Math.abs(a) <= 90 && Math.abs(b) > 90) { lon = b; lat = a; }
+    csysEl.value = 'gcj02'; latEl.value = lat.toFixed(6); lonEl.value = lon.toFixed(6);
+    refresh(false);
+  } else alert('Could not find coordinates in that link. Paste a full amap.com URL.');
+});
+
+// ---------- Copy helpers ----------
+function copyText(t, msg) {
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject())
+    .then(() => alert(msg)).catch(() => { prompt('Copy manually:', t); });
+}
+$('copyLoon').addEventListener('click', () => copyText(
+  'longitude = ' + $('loonLon').textContent + '\nlatitude = ' + $('loonLat').textContent, 'Loon values copied.'));
+$('copySR').addEventListener('click', () => copyText($('srArgs').textContent, 'Shadowrocket string copied.'));
+$('copyLatLon').addEventListener('click', () => copyText($('final').textContent, 'Coordinates copied.'));
+
+refresh(false);
+</script>
+</body>
+</html>
