@@ -1,233 +1,837 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>WLOC Coordinate Picker</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:," />
+<title>WLOC GPS Coordinate Picker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; color: #1c1c1e; }
-  #map { height: 52vh; min-height: 320px; }
-  .panel { padding: 16px; max-width: 720px; margin: 0 auto; }
-  h1 { font-size: 20px; margin: 4px 0 2px; }
-  .sub { color: #6b7280; font-size: 13px; margin: 0 0 14px; }
-  .row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-  .field { flex: 1; min-width: 140px; }
-  label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
-  input, select { width: 100%; padding: 9px 10px; font-size: 15px; border: 1px solid #d1d5db; border-radius: 8px; }
-  input.bad { border-color: #ef4444; background: #fef2f2; }
-  .hint { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
-  .error { font-size: 12px; color: #b91c1c; margin: 2px 0 0; display: none; }
-  .btn { display: inline-block; padding: 10px 16px; font-size: 15px; border: none; border-radius: 8px; background: #6366f1; color: #fff; cursor: pointer; }
-  .btn:active { background: #4f46e5; }
-  .btn.ghost { background: #eef2ff; color: #4338ca; }
-  .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin: 12px 0; font-size: 14px; }
-  .card code { font-size: 13px; word-break: break-all; }
-  .ok { color: #047857; font-weight: 600; }
-  .searchrow { display: flex; gap: 8px; }
-  .searchrow input { flex: 1; }
+  :root{
+    --bg:#eef2ed;
+    --surface:#ffffff;
+    --surface-2:#f3f6f2;
+    --surface-3:#e8eee7;
+    --text:#14221a;
+    --muted:#5c6f62;
+    --border:#d3ddd2;
+    --accent:#0d7a5f;
+    --accent-2:#0a5d49;
+    --accent-soft:#dff3ea;
+    --warning:#fff7e6;
+    --danger:#b42318;
+    --danger-bg:#fef2f2;
+    --ok:#067647;
+    --shadow:0 8px 30px rgba(18,35,24,.08), 0 1px 3px rgba(18,35,24,.06);
+    --radius:18px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0c1210;
+      --surface:#131e18;
+      --surface-2:#18251e;
+      --surface-3:#1d2e24;
+      --text:#e6efe8;
+      --muted:#93a69b;
+      --border:#26362c;
+      --accent:#22b78f;
+      --accent-2:#34d1a8;
+      --accent-soft:#123528;
+      --warning:#2a2110;
+      --danger:#ff7b72;
+      --danger-bg:#2c1515;
+      --ok:#32d583;
+      --shadow:0 8px 30px rgba(0,0,0,.38);
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family: ui-sans-system, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* Map */
+  #map{
+    height:46vh;
+    min-height:340px;
+    max-height:560px;
+    width:100%;
+    background:#dfe8de;
+    z-index:1;
+  }
+  .leaflet-container{font-family:inherit}
+  .leaflet-control-attribution{
+    font-size:10px !important;
+    background:color-mix(in srgb, var(--surface) 82%, transparent) !important;
+    color:var(--muted) !important;
+    backdrop-filter: blur(6px);
+  }
+  @media (max-width:640px){
+    #map{height:44vh; min-height:300px}
+  }
+
+  .wrap{
+    max-width:880px;
+    margin:0 auto;
+    padding:18px 16px 28px;
+  }
+  @media (min-width:720px){
+    .wrap{padding:22px 20px 36px}
+  }
+
+  /* Top utility bar */
+  .util{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+    margin-bottom:14px;
+  }
+  .badge{
+    display:inline-flex; align-items:center; gap:7px;
+    font-size:12.5px; font-weight:600; letter-spacing:.01em;
+    padding:7px 10px; border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--text);
+  }
+  .badge i{
+    width:8px; height:8px; border-radius:50%;
+    background:var(--accent); display:inline-block;
+    box-shadow:0 0 0 3px var(--accent-soft);
+  }
+  .badge.subtle{font-weight:500; color:var(--muted)}
+  .spacer{flex:1}
+
+  /* Search */
+  .searchbar{
+    display:flex; gap:8px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:6px;
+    box-shadow:var(--shadow);
+  }
+  .searchbar input{
+    flex:1; min-width:0;
+    border:0; outline:0; background:transparent;
+    color:var(--text);
+    font-size:16px; padding:10px 10px;
+  }
+  .searchbar input::placeholder{color:var(--muted)}
+  .btn{
+    appearance:none; border:1px solid transparent;
+    border-radius:11px;
+    padding:11px 14px;
+    font-size:14.5px; font-weight:600;
+    line-height:1; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    min-height:44px;
+    transition:.15s;
+    white-space:nowrap;
+  }
+  .btn-primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .btn-primary:active{background:var(--accent-2)}
+  .btn-secondary{background:var(--surface); color:var(--text); border-color:var(--border)}
+  .btn-secondary:active{background:var(--surface-2)}
+  .btn-ghost{background:var(--surface-2); color:var(--text); border-color:var(--border)}
+  .btn-block{width:100%}
+  .btn-small{padding:9px 12px; min-height:40px; font-size:13.5px; border-radius:10px}
+
+  /* Cards */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    margin-top:14px;
+  }
+  .card-head{
+    padding:14px 16px 10px;
+    display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+  }
+  .card-head h2{
+    margin:0; font-size:15px; line-height:1.2; letter-spacing:-.01em;
+  }
+  .card-head p{
+    margin:4px 0 0; font-size:13px; line-height:1.45; color:var(--muted);
+  }
+  .card-body{padding:0 16px 16px}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media (max-width:560px){ .grid2{grid-template-columns:1fr} }
+
+  label{
+    display:block; font-size:12.5px; font-weight:600; letter-spacing:.01em;
+    color:var(--text); margin-bottom:6px;
+  }
+  label span{font-weight:500; color:var(--muted)}
+  .input{
+    width:100%;
+    padding:12px 12px;
+    font-size:16px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:var(--surface);
+    color:var(--text);
+    outline:none;
+  }
+  .input:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+  .input.bad{border-color:var(--danger); background:var(--danger-bg)}
+  select.input{appearance:none; background-image:linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position:calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:32px}
+  .hint{font-size:12.5px; line-height:1.45; color:var(--muted); margin:6px 0 0}
+  .error{font-size:12.5px; color:var(--danger); margin:6px 0 0; display:none; line-height:1.4}
+  .error.show{display:block}
+  .hint.warn{
+    background:var(--warning); border:1px solid color-mix(in srgb, var(--border) 70%, #f5c542 30%);
+    padding:9px 10px; border-radius:10px; color:var(--text);
+  }
+
+  /* Result */
+  .final-box{
+    background:linear-gradient(180deg, var(--surface-2), var(--surface));
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:14px;
+  }
+  .final-label{font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  .final-coords{
+    font-size:22px; line-height:1.15; font-weight:700; letter-spacing:-.02em;
+    margin:6px 0 4px; font-variant-numeric:tabular-nums;
+    word-break:break-all;
+  }
+  @media (max-width:420px){ .final-coords{font-size:19px} }
+  .final-meta{font-size:13px; color:var(--muted); line-height:1.5}
+  .mono{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size:13px; line-height:1.6;
+    background:var(--surface-3);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:11px 12px;
+    word-break:break-all;
+    white-space:pre-wrap;
+  }
+  .kv{display:grid; grid-template-columns:92px 1fr; gap:8px 10px; font-size:13.5px; line-height:1.5}
+  .kv dt{color:var(--muted); font-weight:600}
+  .kv dd{margin:0; font-variant-numeric:tabular-nums; word-break:break-all}
+  .actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+  .actions .btn{flex:1; min-width:140px}
+  @media (max-width:540px){ .actions .btn{min-width:100%; flex-basis:100%} }
+
+  .toast{
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(12px);
+    background:#102018; color:#eafff3;
+    padding:11px 14px; border-radius:999px;
+    font-size:14px; font-weight:600;
+    box-shadow:0 12px 30px rgba(0,0,0,.25);
+    opacity:0; pointer-events:none; transition:.22s;
+    z-index:9999; max-width:calc(100vw - 28px); text-align:center;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  @media (prefers-color-scheme: dark){ .toast{background:#e6efe8; color:#0e1a13} }
+
+  .steps{
+    display:grid; gap:10px; margin:0; padding:0; list-style:none; counter-reset:step;
+  }
+  .steps li{
+    display:flex; gap:11px; align-items:flex-start;
+    background:var(--surface-2); border:1px solid var(--border);
+    border-radius:12px; padding:11px 12px;
+    font-size:13.5px; line-height:1.5; color:var(--text);
+  }
+  .steps li::before{
+    counter-increment:step; content:counter(step);
+    flex:0 0 26px; width:26px; height:26px; border-radius:50%;
+    display:grid; place-items:center;
+    background:var(--accent); color:#fff; font-size:13px; font-weight:700; margin-top:1px;
+  }
+  .steps b{font-weight:650}
+  .small-links{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+  .small-links a{
+    font-size:13px; font-weight:600; color:var(--accent);
+    text-decoration:none; border:1px solid var(--border);
+    background:var(--surface); padding:8px 10px; border-radius:999px;
+  }
+  .divider{height:1px; background:var(--border); margin:14px 0}
+  .footnote{font-size:12.5px; line-height:1.6; color:var(--muted); margin-top:14px}
+  .footnote a{color:var(--accent)}
 </style>
 </head>
 <body>
 
-<div id="map"></div>
+<div id="map" aria-label="Map — tap to move the pin"></div>
 
-<div class="panel">
-  <h1>WLOC Coordinate Picker</h1>
-  <p class="sub">Tap the map (or drag the pin) to get correct <strong>WGS84</strong> GPS coordinates for your WLOC module.</p>
+<div class="wrap">
 
-  <div class="searchrow" style="margin-bottom:12px">
-    <input id="search" type="text" placeholder="Search a place… (e.g. Central Park)">
-    <button class="btn ghost" id="searchBtn">Go</button>
+  <div class="util">
+    <span class="badge"><i></i> WGS84 output — what WLOC needs</span>
+    <span class="badge subtle" id="accuracyBadge">± 25 m</span>
+    <span class="spacer"></span>
+    <button class="btn btn-secondary btn-small" id="myLocBtn" type="button">◎ Use my location</button>
   </div>
 
-  <div class="row">
-    <div class="field">
-      <label>Latitude (−90 to 90)</label>
-      <input id="lat" type="text" inputmode="decimal" value="22.544577">
-      <p class="error" id="latErr">Enter a number between −90 and 90.</p>
-    </div>
-    <div class="field">
-      <label>Longitude (−180 to 180)</label>
-      <input id="lon" type="text" inputmode="decimal" value="113.94114">
-      <p class="error" id="lonErr">Enter a number between −180 and 180.</p>
-    </div>
+  <div class="searchbar" role="search">
+    <input id="search" type="search" enterkeyhint="search" placeholder="Search a place — e.g. Burj Khalifa, Central Park, Clifton Beach" autocomplete="off" />
+    <button class="btn btn-primary" id="searchBtn" type="button">Search</button>
   </div>
+  <p class="hint" style="margin-top:8px">Tap the map or drag the pin. Search uses OpenStreetMap. You can also paste <em>lat, lon</em> directly into the search box.</p>
 
-  <div class="row">
-    <div class="field">
-      <label>Coordinate system of the numbers above</label>
-      <select id="csys">
-        <option value="wgs84">WGS84 — GPS standard (what WLOC needs)</option>
-        <option value="gcj02">GCJ-02 — Amap / AutoNavi</option>
-        <option value="bd09">BD-09 — Baidu Maps</option>
-      </select>
-      <p class="hint">Pasting Amap/Baidu coords? Pick their system and they'll be converted to correct WGS84 automatically.</p>
+  <!-- Coordinate inputs -->
+  <section class="card" aria-labelledby="coordsTitle">
+    <div class="card-head">
+      <div>
+        <h2 id="coordsTitle">Coordinates</h2>
+        <p>These are the numbers you are entering. WLOC always receives the converted WGS84 result below.</p>
+      </div>
+      <span class="badge subtle" id="sysBadge">WGS84</span>
     </div>
-  </div>
+    <div class="card-body">
+      <div class="grid2">
+        <div>
+          <label for="lat">Latitude <span>−90 to 90</span></label>
+          <input class="input" id="lat" inputmode="decimal" autocomplete="off" spellcheck="false" value="24.860735" />
+          <p class="error" id="latErr">Enter a number between −90 and 90.</p>
+        </div>
+        <div>
+          <label for="lon">Longitude <span>−180 to 180</span></label>
+          <input class="input" id="lon" inputmode="decimal" autocomplete="off" spellcheck="false" value="67.001137" />
+          <p class="error" id="lonErr">Enter a number between −180 and 180.</p>
+        </div>
+      </div>
 
-  <div class="row">
-    <div class="field">
-      <label>Paste an Amap share link (optional)</label>
-      <input id="amaplink" type="text" placeholder="https://www.amap.com/… or surl.amap.com/…">
-      <p class="hint">Extracts GCJ-02 coordinates from the link and converts them. Short links that need a redirect may not resolve.</p>
-    </div>
-    <div class="field" style="flex:0 0 auto; align-self:flex-end">
-      <button class="btn ghost" id="parseBtn">Extract</button>
-    </div>
-  </div>
+      <div style="margin-top:12px">
+        <label for="csys">What system are the numbers above?</label>
+        <select class="input" id="csys">
+          <option value="wgs84" selected>WGS84 — GPS standard (recommended • what WLOC needs)</option>
+          <option value="gcj02">GCJ-02 — Amap / Gaode / AutoNavi (China offset)</option>
+          <option value="bd09">BD-09 — Baidu Maps (extra offset)</option>
+        </select>
+        <p class="hint">If you copied numbers from Amap or Baidu, choose that system here — they will be converted to true WGS84 automatically. Coordinates outside China are unaffected by GCJ-02/BD-09.</p>
+      </div>
 
-  <div class="row">
-    <div class="field">
-      <label>Accuracy (meters)</label>
-      <input id="acc" type="text" inputmode="numeric" value="25">
-    </div>
-    <div class="field">
-      <label>Jitter radius (meters, 0 = off)</label>
-      <input id="jit" type="text" inputmode="numeric" value="0">
-    </div>
-  </div>
+      <div class="divider"></div>
 
-  <div class="card">
-    <div>Final WGS84: <span class="ok" id="final">22.544577, 113.94114</span></div>
-    <div style="margin-top:8px"><strong>Loon arguments</strong><br>
-      <code>longitude = <span id="loonLon">113.94114</span><br>latitude = <span id="loonLat">22.544577</span></code></div>
-    <div style="margin-top:8px"><strong>Shadowrocket argument string</strong><br>
-      <code id="srArgs">longitude=113.94114&amp;latitude=22.544577&amp;accuracy=25&amp;randomRadius=0&amp;logLevel=info</code></div>
-  </div>
+      <div class="grid2">
+        <div>
+          <label for="amaplink">Paste an Amap / Gaode share link <span>optional</span></label>
+          <input class="input" id="amaplink" placeholder="https://www.amap.com/… or https://surl.amap.com/…" autocomplete="off" spellcheck="false" />
+          <p class="hint">Extracts the GCJ-02 point from the link and converts it. Short links that hide the point behind a redirect may need the full URL.</p>
+        </div>
+        <div style="display:flex; align-items:flex-end">
+          <button class="btn btn-ghost btn-block" id="parseBtn" type="button" style="height:48px">Extract from link</button>
+        </div>
+      </div>
 
-  <div class="row">
-    <button class="btn" id="copyLoon">Copy Loon values</button>
-    <button class="btn" id="copySR">Copy Shadowrocket string</button>
-    <button class="btn ghost" id="copyLatLon">Copy lat, lon</button>
-  </div>
-  <p class="hint">After copying, paste into the module's arguments in Loon / Shadowrocket. Or save straight to the device with the community picker page or iOS Shortcuts from the module README — the save is intercepted locally and never leaves your phone.</p>
+      <div class="grid2" style="margin-top:12px">
+        <div>
+          <label for="acc">Accuracy <span>meters</span></label>
+          <input class="input" id="acc" inputmode="numeric" value="25" />
+          <p class="hint">25–50 m looks natural for Wi-Fi positioning. Lower isn’t more “correct”.</p>
+        </div>
+        <div>
+          <label for="jit">Jitter radius <span>meters • 0 = off</span></label>
+          <input class="input" id="jit" inputmode="numeric" value="0" />
+          <p class="hint">Small random drift around the point. Keep 0 for a fixed location.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Result -->
+  <section class="card" aria-labelledby="resultTitle">
+    <div class="card-head">
+      <div>
+        <h2 id="resultTitle">Ready to paste into WLOC</h2>
+        <p>Always WGS84, 6 decimal places (≈ 0.11 m). Copy, then paste into your module arguments.</p>
+      </div>
+      <span class="badge" id="validBadge"><i></i> Valid</span>
+    </div>
+    <div class="card-body">
+      <div class="final-box">
+        <div class="final-label">Final WGS84 • lat, lon</div>
+        <div class="final-coords" id="finalCoords">24.860735, 67.001137</div>
+        <div class="final-meta" id="finalMeta">Karachi, Pakistan area • DMS 24° 51′ 38.65″ N, 67° 0′ 4.09″ E</div>
+        <div class="small-links">
+          <a id="appleMapsLink" href="#" target="_blank" rel="noopener">Open in Apple Maps ↗</a>
+          <a id="googleMapsLink" href="#" target="_blank" rel="noopener">Open in Google Maps ↗</a>
+          <a id="osmLink" href="#" target="_blank" rel="noopener">OpenStreetMap ↗</a>
+        </div>
+      </div>
+
+      <dl class="kv" style="margin-top:14px">
+        <dt>WGS84</dt><dd id="kvWgs">24.860735, 67.001137</dd>
+        <dt>GCJ-02</dt><dd id="kvGcj">24.860735, 67.001137 (same — outside China)</dd>
+        <dt>BD-09</dt><dd id="kvBd">24.867301, 67.007693</dd>
+        <dt>DMS</dt><dd id="kvDms">24° 51′ 38.65″ N, 67° 0′ 4.09″ E</dd>
+      </dl>
+
+      <div class="divider"></div>
+
+      <label>Loon plugin arguments</label>
+      <div class="mono" id="loonBox">longitude = 67.001137
+latitude = 24.860735</div>
+
+      <label style="margin-top:12px">Shadowrocket argument string</label>
+      <div class="mono" id="srBox">longitude=67.001137&amp;latitude=24.860735&amp;accuracy=25&amp;randomRadius=0&amp;logLevel=info</div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="copyLoon" type="button">Copy Loon values</button>
+        <button class="btn btn-secondary" id="copySR" type="button">Copy Shadowrocket string</button>
+        <button class="btn btn-ghost" id="copyLatLon" type="button">Copy lat, lon</button>
+      </div>
+
+      <p class="hint warn" style="margin-top:12px">WLOC changes Apple’s <b>network (Wi-Fi / cell) location</b>, not the GPS chip. Works best indoors / on Wi-Fi. Outdoors with strong GPS, the real position can still win — check the blue dot in Apple Maps after a restart if it doesn’t update.</p>
+    </div>
+  </section>
+
+  <!-- How to use -->
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Use it in 30 seconds</h2>
+        <p>No install. Keep this page on your Home Screen for one-tap access.</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <ol class="steps">
+        <li><span><b>Pick the spot</b> — tap the map, drag the pin, search, use your current location, or paste numbers / an Amap link above.</span></li>
+        <li><span><b>Check the system</b> — if the numbers came from Amap choose GCJ-02, from Baidu choose BD-09. Otherwise leave WGS84.</span></li>
+        <li><span><b>Copy &amp; paste</b> — use the Loon or Shadowrocket copy button, then paste into the module’s arguments. Restart the phone if Apple Maps still shows the old dot.</span></li>
+      </ol>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn btn-secondary" id="resetKarachi" type="button">Reset to Karachi example</button>
+        <button class="btn btn-ghost" id="centerBtn" type="button">Center map on pin</button>
+      </div>
+      <p class="footnote">
+        iPhone / iPad: <b>Share → Add to Home Screen</b> to keep the picker like an app. Tiles &amp; search © OpenStreetMap contributors • Geocoding by Nominatim. Conversions use the standard public GCJ-02 / BD-09 transforms (iterative inverse for &lt; 2 m error). Nothing you type leaves the page except map tiles and the place search you run.
+      </p>
+    </div>
+  </section>
+
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<div class="toast" id="toast" role="status" aria-live="polite">Copied</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
-// ---------- Coordinate math (standard public GCJ-02 / BD-09 transforms) ----------
-const PI = Math.PI, A = 6378245.0, EE = 0.00669342162296594323;
-function outOfChina(lat, lon) { return lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271; }
-function tLat(x, y) {
-  let r = -100 + 2*x + 3*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
-  r += (20*Math.sin(6*x*PI) + 20*Math.sin(2*x*PI)) * 2/3;
-  r += (20*Math.sin(y*PI) + 40*Math.sin(y/3*PI)) * 2/3;
-  r += (160*Math.sin(y/12*PI) + 320*Math.sin(y*PI/30)) * 2/3;
-  return r;
-}
-function tLon(x, y) {
-  let r = 300 + x + 2*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
-  r += (20*Math.sin(6*x*PI) + 20*Math.sin(2*x*PI)) * 2/3;
-  r += (20*Math.sin(x*PI) + 40*Math.sin(x/3*PI)) * 2/3;
-  r += (150*Math.sin(x/12*PI) + 300*Math.sin(x*PI/30)) * 2/3;
-  return r;
-}
-function wgs84ToGcj02(lat, lon) {
-  if (outOfChina(lat, lon)) return [lat, lon];
-  let dLat = tLat(lon-105, lat-35), dLon = tLon(lon-105, lat-35);
-  const rad = lat/180*PI; let m = 1 - EE*Math.sin(rad)*Math.sin(rad); const s = Math.sqrt(m);
-  dLat = dLat*180/((A*(1-EE))/(m*s)*PI); dLon = dLon*180/(A/s*Math.cos(rad)*PI);
-  return [lat+dLat, lon+dLon];
-}
-function gcj02ToWgs84(lat, lon) {
-  if (outOfChina(lat, lon)) return [lat, lon];
-  const g = wgs84ToGcj02(lat, lon);
-  return [lat*2-g[0], lon*2-g[1]];
-}
-function bd09ToGcj02(lat, lon) {
-  const x = lon - 0.0065, y = lat - 0.006;
-  const z = Math.sqrt(x*x + y*y) - 0.00002*Math.sin(y*PI);
-  const t = Math.atan2(y, x) - 0.000003*Math.cos(x*PI);
-  return [z*Math.sin(t), z*Math.cos(t)];
-}
-function toWgs84(lat, lon, sys) {
-  if (sys === 'gcj02') return gcj02ToWgs84(lat, lon);
-  if (sys === 'bd09') { const g = bd09ToGcj02(lat, lon); return gcj02ToWgs84(g[0], g[1]); }
-  return [lat, lon];
-}
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
 
-// ---------- Map ----------
-const map = L.map('map').setView([22.544577, 113.94114], 13);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-const marker = L.marker([22.544577, 113.94114], { draggable: true }).addTo(map);
+  // ---------- Coordinate math (standard public transforms) ----------
+  var PI = Math.PI;
+  var A = 6378245.0;
+  var EE = 0.00669342162296594323;
+  var X_PI = PI * 3000.0 / 180.0;
 
-const $ = id => document.getElementById(id);
-const latEl = $('lat'), lonEl = $('lon'), csysEl = $('csys');
+  function outOfChina(lat, lon){
+    return lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271;
+  }
+  function transformLat(x, y){
+    var ret = -100.0 + 2.0*x + 3.0*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+    ret += (20.0*Math.sin(6.0*x*PI) + 20.0*Math.sin(2.0*x*PI)) * 2.0/3.0;
+    ret += (20.0*Math.sin(y*PI) + 40.0*Math.sin(y/3.0*PI)) * 2.0/3.0;
+    ret += (160.0*Math.sin(y/12.0*PI) + 320.0*Math.sin(y*PI/30.0)) * 2.0/3.0;
+    return ret;
+  }
+  function transformLon(x, y){
+    var ret = 300.0 + x + 2.0*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+    ret += (20.0*Math.sin(6.0*x*PI) + 20.0*Math.sin(2.0*x*PI)) * 2.0/3.0;
+    ret += (20.0*Math.sin(x*PI) + 40.0*Math.sin(x/3.0*PI)) * 2.0/3.0;
+    ret += (150.0*Math.sin(x/12.0*PI) + 300.0*Math.sin(x*PI/30.0)) * 2.0/3.0;
+    return ret;
+  }
+  function wgs84ToGcj02(lat, lon){
+    if (outOfChina(lat, lon)) return [lat, lon];
+    var dLat = transformLat(lon - 105.0, lat - 35.0);
+    var dLon = transformLon(lon - 105.0, lat - 35.0);
+    var radLat = lat / 180.0 * PI;
+    var magic = Math.sin(radLat);
+    magic = 1 - EE * magic * magic;
+    var sqrtMagic = Math.sqrt(magic);
+    dLat = (dLat * 180.0) / ((A * (1 - EE)) / (magic * sqrtMagic) * PI);
+    dLon = (dLon * 180.0) / (A / sqrtMagic * Math.cos(radLat) * PI);
+    return [lat + dLat, lon + dLon];
+  }
+  function gcj02ToWgs84(lat, lon){
+    if (outOfChina(lat, lon)) return [lat, lon];
+    // Iterative inverse — converges to <1e-7 deg in a few steps
+    var wLat = lat, wLon = lon;
+    for (var i = 0; i < 4; i++){
+      var g = wgs84ToGcj02(wLat, wLon);
+      wLat += (lat - g[0]);
+      wLon += (lon - g[1]);
+    }
+    return [wLat, wLon];
+  }
+  function gcj02ToBd09(lat, lon){
+    var x = lon, y = lat;
+    var z = Math.sqrt(x*x + y*y) + 0.00002 * Math.sin(y * X_PI);
+    var theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * X_PI);
+    return [z * Math.sin(theta) + 0.006, z * Math.cos(theta) + 0.0065];
+  }
+  function bd09ToGcj02(lat, lon){
+    var x = lon - 0.0065, y = lat - 0.006;
+    var z = Math.sqrt(x*x + y*y) - 0.00002 * Math.sin(y * X_PI);
+    var theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * X_PI);
+    return [z * Math.sin(theta), z * Math.cos(theta)];
+  }
+  function wgs84ToBd09(lat, lon){
+    var g = wgs84ToGcj02(lat, lon);
+    return gcj02ToBd09(g[0], g[1]);
+  }
+  function bd09ToWgs84(lat, lon){
+    var g = bd09ToGcj02(lat, lon);
+    return gcj02ToWgs84(g[0], g[1]);
+  }
+  function toWgs84(lat, lon, sys){
+    if (sys === "gcj02") return gcj02ToWgs84(lat, lon);
+    if (sys === "bd09") return bd09ToWgs84(lat, lon);
+    return [lat, lon];
+  }
+  function fromWgs84(lat, lon, sys){
+    if (sys === "gcj02") return wgs84ToGcj02(lat, lon);
+    if (sys === "bd09") return wgs84ToBd09(lat, lon);
+    return [lat, lon];
+  }
 
-function validNum(v, min, max) { const n = Number(v); return v.trim() !== '' && isFinite(n) && n >= min && n <= max; }
+  function fmt(n){ return Number(n).toFixed(6); }
+  function toDMS(deg, isLat){
+    var dir = isLat ? (deg >= 0 ? "N" : "S") : (deg >= 0 ? "E" : "W");
+    var a = Math.abs(deg);
+    var d = Math.floor(a);
+    var mFloat = (a - d) * 60;
+    var m = Math.floor(mFloat);
+    var s = (mFloat - m) * 60;
+    return d + "° " + m + "′ " + s.toFixed(2) + "″ " + dir;
+  }
 
-function refresh(fromMap) {
-  const latOk = validNum(latEl.value, -90, 90), lonOk = validNum(lonEl.value, -180, 180);
-  latEl.classList.toggle('bad', !latOk); lonEl.classList.toggle('bad', !lonOk);
-  $('latErr').style.display = latOk ? 'none' : 'block';
-  $('lonErr').style.display = lonOk ? 'none' : 'block';
-  if (!latOk || !lonOk) { $('final').textContent = '— fix the highlighted field —'; $('final').classList.remove('ok'); return; }
-  let [wLat, wLon] = toWgs84(Number(latEl.value), Number(lonEl.value), csysEl.value);
-  wLat = +wLat.toFixed(6); wLon = +wLon.toFixed(6);
-  $('final').textContent = wLat + ', ' + wLon; $('final').classList.add('ok');
-  $('loonLat').textContent = wLat; $('loonLon').textContent = wLon;
-  const acc = $('acc').value.trim() || '25', jit = $('jit').value.trim() || '0';
-  $('srArgs').textContent = 'longitude=' + wLon + '&latitude=' + wLat + '&accuracy=' + acc + '&randomRadius=' + jit + '&logLevel=info';
-  if (!fromMap) { marker.setLatLng([wLat, wLon]); map.panTo([wLat, wLon]); }
-}
+  function validNum(v, min, max){
+    if (v == null) return false;
+    var t = String(v).trim();
+    if (t === "") return false;
+    var n = Number(t);
+    return isFinite(n) && n >= min && n <= max;
+  }
 
-function setFromMap(latlng) {
-  const sys = csysEl.value;
-  // Map tiles are WGS84; if the user picked another system, show the equivalent input
-  let lat = latlng.lat, lon = latlng.lng;
-  if (sys === 'gcj02') [lat, lon] = wgs84ToGcj02(lat, lon);
-  if (sys === 'bd09') { const g = wgs84ToGcj02(lat, lon); const z = Math.sqrt(g[1]*g[1]+g[0]*g[0]) + 0.00002*Math.sin(g[0]*PI); const t = Math.atan2(g[0], g[1]) + 0.000003*Math.cos(g[1]*PI); lat = z*Math.sin(t)+0.006; lon = z*Math.cos(t)+0.0065; }
-  latEl.value = lat.toFixed(6); lonEl.value = lon.toFixed(6);
-  refresh(true);
-}
+  // ---------- Elements ----------
+  var latEl = $("lat"), lonEl = $("lon"), csysEl = $("csys");
+  var accEl = $("acc"), jitEl = $("jit");
+  var finalEl = $("finalCoords"), metaEl = $("finalMeta");
+  var toastEl = $("toast");
+  var toastTimer = null;
 
-map.on('click', e => { marker.setLatLng(e.latlng); setFromMap(e.latlng); });
-marker.on('dragend', () => setFromMap(marker.getLatLng()));
-[latEl, lonEl, csysEl, $('acc'), $('jit')].forEach(el => el.addEventListener('input', () => refresh(false)));
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2200);
+  }
 
-// ---------- Search (Nominatim) ----------
-async function doSearch() {
-  const q = $('search').value.trim(); if (!q) return;
-  try {
-    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } });
-    const j = await r.json();
-    if (j && j.length) { const p = j[0]; marker.setLatLng([+p.lat, +p.lon]); map.setView([+p.lat, +p.lon], 14); setFromMap({ lat: +p.lat, lng: +p.lon }); }
-    else alert('No results found.');
-  } catch (e) { alert('Search failed — check your connection.'); }
-}
-$('searchBtn').addEventListener('click', doSearch);
-$('search').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+  // ---------- Map (graceful if Leaflet CDN is blocked) ----------
+  var DEFAULT_LAT = 24.860735, DEFAULT_LON = 67.001137; // Karachi — neutral example
+  var hasLeaflet = (typeof L !== "undefined");
+  var map = null, marker = null, accCircle = null;
+  if (hasLeaflet) {
+    try {
+      map = L.map("map", { tap: true, zoomControl: true }).setView([DEFAULT_LAT, DEFAULT_LON], 13);
+      if (window.innerWidth < 640) {
+        try { map.zoomControl.setPosition("bottomright"); } catch(e){}
+      }
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors"
+      }).addTo(map);
+      marker = L.marker([DEFAULT_LAT, DEFAULT_LON], { draggable: true, autoPan: true }).addTo(map);
+      accCircle = L.circle([DEFAULT_LAT, DEFAULT_LON], { radius: 25, color: "#0d7a5f", weight: 1, fillColor: "#0d7a5f", fillOpacity: 0.12 }).addTo(map);
+    } catch(e) { hasLeaflet = false; map = null; marker = null; accCircle = null; }
+  }
+  if (!hasLeaflet) {
+    var mapEl = $("map");
+    mapEl.style.display = "flex";
+    mapEl.style.alignItems = "center";
+    mapEl.style.justifyContent = "center";
+    mapEl.style.padding = "18px";
+    mapEl.innerHTML = '<div style="max-width:520px;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 14px;box-shadow:var(--shadow)"><div style="font-weight:700;font-size:15px;margin-bottom:6px">Map tiles need internet</div><div style="font-size:13px;line-height:1.55;color:var(--muted)">The interactive map couldn’t load right now — but the converter below still works perfectly. Type coordinates, paste an Amap link, or search once you’re back online.</div></div>';
+  }
 
-// ---------- Amap link extraction (best effort) ----------
-$('parseBtn').addEventListener('click', () => {
-  const s = $('amaplink').value;
-  // look for decimal lng,lat pairs (Amap links carry GCJ-02)
-  const m = s.match(/(-?\d{2,3}\.\d+)\s*,\s*(-?\d{1,2}\.\d+)/);
-  if (m) {
-    let a = parseFloat(m[1]), b = parseFloat(m[2]);
-    // decide which is lon: lon range wider; Amap uses lng,lat order
-    let lon = a, lat = b;
-    if (Math.abs(a) <= 90 && Math.abs(b) > 90) { lon = b; lat = a; }
-    csysEl.value = 'gcj02'; latEl.value = lat.toFixed(6); lonEl.value = lon.toFixed(6);
+  function updateAccuracyBadge(){
+    var acc = parseInt(accEl.value, 10);
+    if (!isFinite(acc) || acc < 0) acc = 25;
+    $("accuracyBadge").textContent = "± " + acc + " m";
+    try { accCircle.setRadius(Math.max(5, acc)); } catch(e){}
+  }
+
+  function refresh(fromMap){
+    var latOk = validNum(latEl.value, -90, 90);
+    var lonOk = validNum(lonEl.value, -180, 180);
+    latEl.classList.toggle("bad", !latOk);
+    lonEl.classList.toggle("bad", !lonOk);
+    $("latErr").classList.toggle("show", !latOk);
+    $("lonErr").classList.toggle("show", !lonOk);
+
+    var sys = csysEl.value;
+    $("sysBadge").textContent = sys === "wgs84" ? "WGS84" : (sys === "gcj02" ? "GCJ-02 → WGS84" : "BD-09 → WGS84");
+
+    if (!latOk || !lonOk){
+      finalEl.textContent = "Fix the highlighted field";
+      metaEl.textContent = "Latitude must be −90 to 90 and longitude −180 to 180.";
+      $("validBadge").innerHTML = "<i style=\"background:#b42318;box-shadow:0 0 0 3px #fee4e2\"></i> Check values";
+      $("kvWgs").textContent = "—"; $("kvGcj").textContent = "—"; $("kvBd").textContent = "—"; $("kvDms").textContent = "—";
+      return;
+    }
+
+    var inLat = Number(latEl.value), inLon = Number(lonEl.value);
+    var w = toWgs84(inLat, inLon, sys);
+    var wLat = w[0], wLon = w[1];
+    // Clamp after conversion (BD/GCJ offsets never legitimately cross the poles, but be safe)
+    if (wLat > 90) wLat = 90; if (wLat < -90) wLat = -90;
+    if (wLon > 180) wLon = 180; if (wLon < -180) wLon = -180;
+
+    var wLatS = fmt(wLat), wLonS = fmt(wLon);
+    finalEl.textContent = wLatS + ", " + wLonS;
+    var dms = toDMS(wLat, true) + ", " + toDMS(wLon, false);
+    metaEl.textContent = "DMS " + dms + " • Paste the WGS84 pair above into WLOC.";
+    $("validBadge").innerHTML = "<i></i> Valid WGS84";
+
+    var gcj = wgs84ToGcj02(wLat, wLon);
+    var bd = wgs84ToBd09(wLat, wLon);
+    $("kvWgs").textContent = wLatS + ", " + wLonS;
+    $("kvGcj").textContent = fmt(gcj[0]) + ", " + fmt(gcj[1]) + (outOfChina(wLat, wLon) ? " (same — outside China)" : "");
+    $("kvBd").textContent = fmt(bd[0]) + ", " + fmt(bd[1]) + (outOfChina(wLat, wLon) ? " (offset still applies in Baidu)" : "");
+    $("kvDms").textContent = dms;
+
+    var acc = (accEl.value || "").toString().trim();
+    if (!/^\d+$/.test(acc)) acc = "25";
+    var jit = (jitEl.value || "").toString().trim();
+    if (!/^\d+$/.test(jit)) jit = "0";
+
+    $("loonBox").textContent = "longitude = " + wLonS + "\nlatitude = " + wLatS;
+    $("srBox").textContent = "longitude=" + wLonS + "&latitude=" + wLatS + "&accuracy=" + acc + "&randomRadius=" + jit + "&logLevel=info";
+
+    $("appleMapsLink").href = "https://maps.apple.com/?ll=" + wLatS + "," + wLonS + "&q=" + wLatS + "," + wLonS;
+    $("googleMapsLink").href = "https://www.google.com/maps?q=" + wLatS + "," + wLonS;
+    $("osmLink").href = "https://www.openstreetmap.org/?mlat=" + wLatS + "&mlon=" + wLonS + "#map=15/" + wLatS + "/" + wLonS;
+
+    updateAccuracyBadge();
+    try { accCircle.setLatLng([wLat, wLon]); } catch(e){}
+
+    if (!fromMap){
+      try {
+        marker.setLatLng([wLat, wLon]);
+        // Keep zoom, just pan if far
+        var cur = map.getCenter();
+        var dist = Math.abs(cur.lat - wLat) + Math.abs(cur.lng - wLon);
+        if (dist > 0.02) map.panTo([wLat, wLon], { animate: true });
+        else marker.setLatLng([wLat, wLon]);
+      } catch(e){}
+    } else {
+      try { accCircle.setLatLng([wLat, wLon]); } catch(e){}
+    }
+  }
+
+  function setFromMap(latlng){
+    var sys = csysEl.value;
+    var converted = fromWgs84(latlng.lat, latlng.lng, sys);
+    latEl.value = fmt(converted[0]);
+    lonEl.value = fmt(converted[1]);
+    refresh(true);
+  }
+
+  if (hasLeaflet && map && marker) {
+    map.on("click", function(e){
+      marker.setLatLng(e.latlng);
+      setFromMap(e.latlng);
+    });
+    marker.on("dragend", function(){
+      setFromMap(marker.getLatLng());
+    });
+  }
+
+  [latEl, lonEl, csysEl, accEl, jitEl].forEach(function(el){
+    el.addEventListener("input", function(){ refresh(false); });
+    el.addEventListener("change", function(){ refresh(false); });
+  });
+
+  // ---------- Search (Nominatim) + lat,lon paste ----------
+  function parseLatLon(text){
+    var m = String(text).trim().match(/^(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+    if (!m) return null;
+    var a = parseFloat(m[1]), b = parseFloat(m[2]);
+    // Heuristic: if |a| > 90 it must be lon,lat
+    if (Math.abs(a) > 90 && Math.abs(b) <= 90) return { lat: b, lon: a };
+    return { lat: a, lon: b };
+  }
+
+  function doSearch(){
+    var q = $("search").value.trim();
+    if (!q) { toast("Type a place name first"); return; }
+    var ll = parseLatLon(q);
+    if (ll && validNum(ll.lat, -90, 90) && validNum(ll.lon, -180, 180)){
+      csysEl.value = "wgs84";
+      latEl.value = fmt(ll.lat);
+      lonEl.value = fmt(ll.lon);
+      refresh(false);
+      if (hasLeaflet && map && marker) {
+        map.setView([ll.lat, ll.lon], Math.max(map.getZoom(), 14));
+        marker.setLatLng([ll.lat, ll.lon]);
+      }
+      toast("Coordinates set");
+      return;
+    }
+    var btn = $("searchBtn");
+    btn.disabled = true; btn.textContent = "Searching…";
+    fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(q), {
+      headers: { "Accept": "application/json" }
+    }).then(function(r){ return r.json(); }).then(function(j){
+      btn.disabled = false; btn.textContent = "Search";
+      if (j && j.length){
+        var p = j[0];
+        var lat = parseFloat(p.lat), lon = parseFloat(p.lon);
+        csysEl.value = "wgs84";
+        latEl.value = fmt(lat); lonEl.value = fmt(lon);
+        if (hasLeaflet && map && marker) {
+          map.setView([lat, lon], 14);
+          marker.setLatLng([lat, lon]);
+        }
+        refresh(false);
+        toast("Found: " + (p.display_name ? p.display_name.split(",").slice(0,2).join(",") : q));
+      } else {
+        toast("No results — try a more specific name");
+      }
+    }).catch(function(){
+      btn.disabled = false; btn.textContent = "Search";
+      toast("Search failed — check connection");
+    });
+  }
+  $("searchBtn").addEventListener("click", doSearch);
+  $("search").addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); doSearch(); } });
+
+  // ---------- My location ----------
+  $("myLocBtn").addEventListener("click", function(){
+    if (!navigator.geolocation){ toast("Geolocation not available in this browser"); return; }
+    var btn = $("myLocBtn");
+    btn.textContent = "Locating…";
+    navigator.geolocation.getCurrentPosition(function(pos){
+      btn.textContent = "◎ Use my location";
+      var lat = pos.coords.latitude, lon = pos.coords.longitude;
+      csysEl.value = "wgs84";
+      latEl.value = fmt(lat); lonEl.value = fmt(lon);
+      if (hasLeaflet && map && marker) {
+        map.setView([lat, lon], 15);
+        marker.setLatLng([lat, lon]);
+      }
+      refresh(false);
+      toast("Current location set (±" + Math.round(pos.coords.accuracy || 0) + " m)");
+    }, function(err){
+      btn.textContent = "◎ Use my location";
+      if (err && err.code === 1) toast("Location permission denied — enable it in Settings → Safari");
+      else toast("Couldn’t get location — try again outdoors");
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 10000 });
+  });
+
+  // ---------- Amap link extraction ----------
+  $("parseBtn").addEventListener("click", function(){
+    var s = ($("amaplink").value || "").trim();
+    if (!s){ toast("Paste an Amap link first"); return; }
+    // Decode once so %2C etc. become commas
+    var t = s;
+    try { t = decodeURIComponent(s); } catch(e){}
+    // Prefer explicit params: position=, center=, destination=, location=, lnglat, etc.
+    var pair = null;
+    var paramMatch = t.match(/(?:position|center|destination|location|point|coordinate|lnglat|geocode)\s*[=:]\s*(-?\d{2,3}\.\d+)\s*[,，]\s*(-?\d{1,2}\.\d+)/i);
+    if (paramMatch) pair = [parseFloat(paramMatch[1]), parseFloat(paramMatch[2])];
+    if (!pair){
+      var m = t.match(/(-?\d{2,3}\.\d{3,})\s*[,，]\s*(-?\d{1,2}\.\d{3,})/);
+      if (m) pair = [parseFloat(m[1]), parseFloat(m[2])];
+    }
+    if (!pair){ toast("No coordinates found in that link — try the full amap.com URL"); return; }
+    var a = pair[0], b = pair[1];
+    var lon, lat;
+    // Amap uses lng,lat order; flip only if clearly lat,lng
+    if (Math.abs(a) <= 90 && Math.abs(b) > 90){ lon = b; lat = a; }
+    else { lon = a; lat = b; }
+    if (!validNum(lat, -90, 90) || !validNum(lon, -180, 180)){ toast("Extracted values look invalid — check the link"); return; }
+    csysEl.value = "gcj02";
+    latEl.value = fmt(lat);
+    lonEl.value = fmt(lon);
     refresh(false);
-  } else alert('Could not find coordinates in that link. Paste a full amap.com URL.');
-});
+    if (hasLeaflet && map) {
+      var fp = $("finalCoords").textContent.split(",");
+      if (fp.length === 2) map.setView([Number(fp[0]), Number(fp[1])], 14);
+    }
+    toast("Amap point extracted → converted to WGS84");
+  });
 
-// ---------- Copy helpers ----------
-function copyText(t, msg) {
-  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject())
-    .then(() => alert(msg)).catch(() => { prompt('Copy manually:', t); });
-}
-$('copyLoon').addEventListener('click', () => copyText(
-  'longitude = ' + $('loonLon').textContent + '\nlatitude = ' + $('loonLat').textContent, 'Loon values copied.'));
-$('copySR').addEventListener('click', () => copyText($('srArgs').textContent, 'Shadowrocket string copied.'));
-$('copyLatLon').addEventListener('click', () => copyText($('final').textContent, 'Coordinates copied.'));
+  // ---------- Copy helpers ----------
+  function copyText(text, msg){
+    function done(){ toast(msg); }
+    function fallback(){
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); done(); }
+      catch(e){ toast("Copy failed — long-press to copy manually"); }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(fallback);
+    } else fallback();
+  }
+  function currentWgs(){
+    var parts = finalEl.textContent.split(",");
+    if (parts.length !== 2) return null;
+    var lat = parts[0].trim(), lon = parts[1].trim();
+    if (!validNum(lat, -90, 90) || !validNum(lon, -180, 180)) return null;
+    return { lat: lat, lon: lon };
+  }
+  $("copyLoon").addEventListener("click", function(){
+    copyText($("loonBox").textContent, "Loon values copied — paste into plugin arguments");
+  });
+  $("copySR").addEventListener("click", function(){
+    copyText($("srBox").textContent, "Shadowrocket string copied");
+  });
+  $("copyLatLon").addEventListener("click", function(){
+    var w = currentWgs();
+    if (!w){ toast("Fix coordinates first"); return; }
+    copyText(w.lat + ", " + w.lon, "Coordinates copied: " + w.lat + ", " + w.lon);
+  });
 
-refresh(false);
+  $("centerBtn").addEventListener("click", function(){
+    var w = currentWgs(); if (!w) return;
+    if (!hasLeaflet || !map || !marker) { toast(w.lat + ", " + w.lon); return; }
+    map.setView([Number(w.lat), Number(w.lon)], Math.max(map.getZoom(), 14));
+    marker.setLatLng([Number(w.lat), Number(w.lon)]);
+  });
+  $("resetKarachi").addEventListener("click", function(){
+    csysEl.value = "wgs84";
+    latEl.value = fmt(DEFAULT_LAT); lonEl.value = fmt(DEFAULT_LON);
+    accEl.value = "25"; jitEl.value = "0";
+    if (hasLeaflet && map && marker) {
+      map.setView([DEFAULT_LAT, DEFAULT_LON], 13);
+      marker.setLatLng([DEFAULT_LAT, DEFAULT_LON]);
+    }
+    refresh(false);
+    toast("Reset to Karachi example");
+  });
+
+  // Initial
+  refresh(false);
+  // Fix Leaflet sizing after fonts/layout settle (important on iPad rotation)
+  if (hasLeaflet && map) {
+    setTimeout(function(){ try { map.invalidateSize(); } catch(e){} }, 250);
+    window.addEventListener("resize", function(){ try { map.invalidateSize(); } catch(e){} });
+    window.addEventListener("orientationchange", function(){ setTimeout(function(){ try { map.invalidateSize(); } catch(e){} }, 300); });
+  }
+})();
 </script>
 </body>
 </html>
